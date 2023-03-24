@@ -103,6 +103,8 @@ class BaseTransform(nn.Module):
             ),
             5,
         )
+        # camera2lidar_rots (4,6,3,3)
+        # camera2lidar_trans (4,6,3)
         combine = camera2lidar_rots.matmul(torch.inverse(intrins))
         points = combine.view(B, N, 1, 1, 1, 3, 3).matmul(points).squeeze(-1)
         points += camera2lidar_trans.view(B, N, 1, 1, 1, 3)
@@ -279,6 +281,8 @@ class BaseDepthTransform(BaseTransform):
 
         extra_rots = lidar_aug_matrix[..., :3, :3]
         extra_trans = lidar_aug_matrix[..., :3, 3]
+        # For the pixel on img feature map, get the real coords on the lidar coordicate.
+        # points coords on featuer map > reversed img aug > cam2lidar@img2cam > lidar aug
         geom = self.get_geometry(
             camera2lidar_rots,
             camera2lidar_trans,

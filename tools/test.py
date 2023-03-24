@@ -6,7 +6,7 @@ import warnings
 import mmcv
 import torch
 from torchpack.utils.config import configs
-from torchpack import distributed as dist
+# from torchpack import distributed as dist
 from mmcv import Config, DictAction
 from mmcv.cnn import fuse_conv_bn
 from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
@@ -112,10 +112,16 @@ def parse_args():
 
 def main():
     args = parse_args()
-    dist.init()
-
-    torch.backends.cudnn.benchmark = True
-    torch.cuda.set_device(dist.local_rank())
+    if args.launcher == 'none':
+        distributed = False
+    else:
+        distributed = True
+    if distributed:
+        init_dist(args.launcher)
+    
+    rank, _ = get_dist_info()
+    import torch
+    torch.cuda.set_device(rank)
 
     assert args.out or args.eval or args.format_only or args.show or args.show_dir, (
         "Please specify at least one operation (save/eval/format/show the "
@@ -131,11 +137,11 @@ def main():
 
     configs.load(args.config, recursive=True)
     cfg = Config(recursive_eval(configs), filename=args.config)
-    print(cfg)
+    print(cfg.pretty_text)
 
     if args.cfg_options is not None:
         cfg.merge_from_dict(args.cfg_options)
-    # set cudnn_benchmark
+    # set cudnn_benchmarkll/
     if cfg.get("cudnn_benchmark", False):
         torch.backends.cudnn.benchmark = True
 
@@ -157,9 +163,6 @@ def main():
         if samples_per_gpu > 1:
             for ds_cfg in cfg.data.test:
                 ds_cfg.pipeline = replace_ImageToTensor(ds_cfg.pipeline)
-
-    # init distributed env first, since logger depends on the dist info.
-    distributed = True
 
     # set random seeds
     if args.seed is not None:

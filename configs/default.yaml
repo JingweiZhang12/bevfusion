@@ -13,7 +13,7 @@ log_config:
     -
       type: TensorboardLoggerHook
 
-load_from: null
+load_from: checkpoints/bevfusion_init_model.pth
 resume_from: null
 
 cudnn_benchmark: false

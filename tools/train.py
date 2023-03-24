@@ -7,7 +7,8 @@ import time
 import numpy as np
 import torch
 from mmcv import Config
-from torchpack import distributed as dist
+from mmcv.runner import init_dist,get_dist_info
+# from torchpack import distributed as dist
 from torchpack.environ import auto_set_run_dir, set_run_dir
 from torchpack.utils.config import configs
 
@@ -16,22 +17,42 @@ from mmdet3d.datasets import build_dataset
 from mmdet3d.models import build_model
 from mmdet3d.utils import get_root_logger, convert_sync_batchnorm, recursive_eval
 
+import torch.multiprocessing as mp
 
 def main():
-    dist.init()
+    # dist.init()
 
     parser = argparse.ArgumentParser()
     parser.add_argument("config", metavar="FILE", help="config file")
     parser.add_argument("--run-dir", metavar="DIR", help="run directory")
+    parser.add_argument(
+        "--launcher",
+        choices=["none", "pytorch", "slurm", "mpi"],
+        default="none",
+        help="job launcher",
+    )
+    parser.add_argument("--port", type=int, help="run directory", default=28743)
     args, opts = parser.parse_known_args()
 
     configs.load(args.config, recursive=True)
     configs.update(opts)
 
     cfg = Config(recursive_eval(configs), filename=args.config)
+    
+    mp.set_start_method('fork', force=True)
 
+    if args.launcher == 'none':
+        distributed = False
+    else:
+        distributed = True
+        init_dist(args.launcher, port=args.port)
+    
+    rank, world_size = get_dist_info()
+    torch.cuda.set_device(rank)
+    cfg.rank=rank
+    cfg.num_gpus = world_size
+    cfg.gpu_ids = list(range(world_size))
     torch.backends.cudnn.benchmark = cfg.cudnn_benchmark
-    torch.cuda.set_device(dist.local_rank())
 
     if args.run_dir is None:
         args.run_dir = auto_set_run_dir()
@@ -48,7 +69,7 @@ def main():
     logger = get_root_logger(log_file=log_file)
 
     # log some basic info
-    logger.info(f"Config:\n{cfg.pretty_text}")
+    # logger.info(f"Config:\n{cfg.pretty_text}")
 
     # set random seeds
     if cfg.seed is not None:
@@ -72,12 +93,11 @@ def main():
             cfg["sync_bn"] = dict(exclude=[])
         model = convert_sync_batchnorm(model, exclude=cfg["sync_bn"]["exclude"])
 
-    logger.info(f"Model:\n{model}")
     train_model(
         model,
         datasets,
         cfg,
-        distributed=True,
+        distributed=distributed,
         validate=True,
         timestamp=timestamp,
     )

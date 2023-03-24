@@ -15,6 +15,7 @@
 #pragma once
 #include <ATen/ATen.h>
 #include <ATen/cuda/CUDAContext.h>
+#include <ATen/cuda/CUDAEvent.h>
 #include <tensorview/tensorview.h>
 #include <torch/script.h>
 
